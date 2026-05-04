@@ -1,67 +1,29 @@
-
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, String, Symbol, Vec};
-
-// Struktur data yang akan menyimpan notes
-#[contracttype]
-#[derive(Clone, Debug)]
-pub struct Note {
-    id: u64,
-    title: String,
-    content: String,
-}
-
-// Storage key untuk data notes
-const NOTE_DATA: Symbol = symbol_short!("NOTE_DATA");
+use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, symbol_short};
 
 #[contract]
-pub struct NotesContract;
+pub struct TolinCarbonTrust;
 
 #[contractimpl]
-impl NotesContract {
-    pub fn get_notes(env: Env) -> Vec<Note> {
-        // 1. ambil data notes dari storage
-        return env.storage().instance().get(&NOTE_DATA).unwrap_or(Vec::new(&env));
+impl TolinCarbonTrust {
+    // Log emissions: Input liters of fuel, returns kg of CO2
+    // For this example, 1 liter of diesel = ~2.68 kg of CO2
+    pub fn log_emission(env: Env, farmer: Address, fuel_liters: u64) -> u64 {
+        farmer.require_auth();
+
+        let coefficient = 268; // Representing 2.68 (scaled by 100)
+        let total_co2 = (fuel_liters * coefficient) / 100;
+
+        // Store the farmer's debt in contract storage
+        let key = Symbol::new(&env, "debt");
+        let current_debt: u64 = env.storage().persistent().get(&farmer).unwrap_or(0);
+        env.storage().persistent().set(&farmer, &(current_debt + total_co2));
+
+        total_co2
     }
 
-    // Fungsi untuk membuat note baru
-    pub fn create_note(env: Env, title: String, content: String) -> String {
-        // 1. ambil data notes dari storage
-        let mut notes: Vec<Note> = env.storage().instance().get(&NOTE_DATA).unwrap_or(Vec::new(&env));
-        
-        // 2. Buat object note baru
-        let note = Note {
-            id: env.prng().gen::<u64>(),
-            title: title,
-            content: content,
-        };
-        
-        // 3. tambahkan note baru ke notes lama
-        notes.push_back(note);
-        
-        // 4. simpan notes ke storage
-        env.storage().instance().set(&NOTE_DATA, &notes);
-        
-        return String::from_str(&env, "Notes berhasil ditambahkan");
-    }
-
-    // Fungsi untuk menghapus notes berdasarkan id
-    pub fn delete_note(env: Env, id: u64) -> String {
-        // 1. ambil data notes dari storage 
-        let mut notes: Vec<Note> = env.storage().instance().get(&NOTE_DATA).unwrap_or(Vec::new(&env));
-
-        // 2. cari index note yang akan dihapus menggunakan perulangan
-        for i in 0..notes.len() {
-            if notes.get(i).unwrap().id == id {
-                notes.remove(i);
-
-                env.storage().instance().set(&NOTE_DATA, &notes);
-                return String::from_str(&env, "Berhasil hapus notes");
-            }
-        }
-
-        return String::from_str(&env, "Notes tidak ditemukan")
+    // View current carbon debt for a farmer
+    pub fn get_debt(env: Env, farmer: Address) -> u64 {
+        env.storage().persistent().get(&farmer).unwrap_or(0)
     }
 }
-
-mod test;
